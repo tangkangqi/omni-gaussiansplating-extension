@@ -4,112 +4,216 @@ from omni.ui import scene as sc
 from omni.kit.viewport.utility import get_active_viewport_window, get_active_viewport, get_active_viewport_and_window
 from PIL import Image
 from pxr import Gf, Usd, UsdGeom
-import omni.ui.scene as scene
+# import omni.ui.scene as scene
 import numpy as np
 import cv2
+import asyncio
 
 class ImageDisplayExtension(omni.ext.IExt):
+    def __init__(self):
+        super().__init__()
+        """The Python version must match the backend version for RPyC to work."""
+        self.camera_position: Gf.Vec3d = None
+        self.camera_rotation: Gf.Vec3d = None
+        self.viewport_window = get_active_viewport_window()
+        self.tgs_provider = ui.ByteImageProvider()
+        self.viewport_api = get_active_viewport()
+        self.usd_context = omni.usd.get_context()
+        self.scene_view = None
+        self.camera_rotation = None
+        self.previous_rotation = None
+        self.interactive_flag = 0
+
+    async def periodic_update(self):
+        while True:
+            await asyncio.sleep(0.1)  # 每隔 0.1 秒检查一次
+            self.get_transform()
+            if self.previous_rotation != self.camera_position:
+                # if self.is_camera_changed():
+                self.previous_rotation = self.camera_rotation
+                self.load_and_display_image()
+                
+    def set_interactive(self):
+        self.interactive_flag = 1
     def on_startup(self, ext_id):
         print("Image Display Extension started")
-
         self._window = ui.Window("Image Display", width=300, height=400)
         self.ext_id = ext_id
         with self._window.frame:
             with ui.VStack():
                 self.image_path_field = ui.StringField(name="Image Path")
+                self.camera_label = ui.Label('camera status')
                 self.load_button = ui.Button("Load Image", clicked_fn=self.load_and_display_image)
-                self.scene_view = None
+                self.clear_button = ui.Button("Clear Image", clicked_fn=self.clear_scene_image)
+                self.tgds_button = ui.Button("Start Intercative tdgs", clicked_fn = self.set_interactive)
+                if self.interactive_flag == 1:
+                    self._task = asyncio.ensure_future(self.periodic_update())
+        # self.rendering_event_stream = self.usd_context.get_rendering_event_stream()
+        # self.rendering_event_delegate = self.rendering_event_stream.create_subscription_to_pop(
+        #     self.load_and_display_image
+        # )
 
-    # def _on_rendering_event(self, event):
-    def load_and_display_image0(self):
-        """Called by rendering_event_stream."""
-        image = np.array(image) # received with shape (H*, W*, 3)
-        image = cv2.resize(image, (self.rgba_w, self.rgba_h), interpolation=cv2.INTER_LINEAR) # resize to (H, W, 3)
-        self.rgba[:,:,:3] = image * 255
-        # self.rgba[:,:,:3] = (self.rgba[:,:,:3] + np.ones((self.rgba_h, self.rgba_w, 3), dtype=np.uint8)) % 256
-        self.ui_nerf_provider.set_bytes_data(self.rgba.flatten().tolist(), (self.rgba_w, self.rgba_h))
+    def update_ui(self):
+        print("[omni.nerf.viewport] Updating UI")
+        # Ref: https://forums.developer.nvidia.com/t/refresh-window-ui/221200
+        self.load_and_display_image()
+
+    def get_transform(self):
+        camera_to_world_mat: Gf.Matrix4d = self.viewport_api.transform
+        object_to_world_mat: Gf.Matrix4d = Gf.Matrix4d()
+        
+        dire_prim_path = "/World/Cube"
+        stage: Usd.Stage = self.usd_context.get_stage()
+        selected_prim: Usd.Prim = stage.GetPrimAtPath(dire_prim_path)
+
+        selected_xform: UsdGeom.Xformable = UsdGeom.Xformable(selected_prim)
+        object_to_world_mat = selected_xform.GetLocalTransformation()
+        # In USD, pre-multiplication is used for matrices.
+        # Ref: https://openusd.org/dev/api/usd_geom_page_front.html#UsdGeom_LinAlgBasics
+        world_to_object_mat: Gf.Matrix4d = object_to_world_mat.GetInverse()
+        camera_to_object_mat: Gf.Matrix4d = camera_to_world_mat * world_to_object_mat
+        camera_to_object_pos: Gf.Vec3d = camera_to_object_mat.ExtractTranslation()
+        camera_to_object_mat.Orthonormalize()
+        camera_to_object_rot: Gf.Vec3d = Gf.Vec3d(*reversed(camera_to_object_mat.ExtractRotation().Decompose(*reversed(Gf.Matrix3d()))))
+        if camera_to_object_pos != self.camera_position or camera_to_object_rot != self.camera_rotation:
+            self.camera_position = camera_to_object_pos
+            self.camera_rotation = camera_to_object_rot
+        
+        self.camera_label.text = f"""camera_to_world_mat: {camera_to_world_mat}, \n 
+        object_to_world_mat: {object_to_world_mat}, \n 
+        camera_to_object_pos: {camera_to_object_pos}, \n
+        camera_to_object_rot: {camera_to_object_rot}"""
+
+    def get_prim_camera(self):
+        stage = self.usd_context.get_stage()
+        prim = stage.GetPrimAtPath("/World/Cube")
+        if not prim.IsValid():
+            return
+
+        xformable = UsdGeom.Xformable(prim)
+        transform = xformable.ComputeLocalToWorldTransform(Usd.TimeCode.Default())
+        # transform = xformable.ComputeLocalToWorldTransform()
+        
+        # Position
+        position = Gf.Vec3d(transform.ExtractTranslation())
+        
+        # Rotation (Euler angles)
+        rotation = transform.ExtractRotation()
+        # euler_angles = rotation.GetEulerAngles()
+        euler_angles = rotation.Decompose(Gf.Vec3d(1, 0, 0), Gf.Vec3d(0, 1, 0), Gf.Vec3d(0, 0, 1))
+    
+        # Scale
+        # scale = Gf.Vec3d(xformable.GetLocalTransformation().ExtractScale())
+        scale = Gf.Vec3d(*(v.GetLength() for v in xformable.GetLocalTransformation().ExtractRotationMatrix()))
+        self.camera_label.text = f"Scale: {scale}, Rotation: {euler_angles}, Position: {position}"
+
+    def get_world_transform_xform(self):
+        """
+        Get the local transformation of a prim using Xformable.
+        See https://openusd.org/release/api/class_usd_geom_xformable.html
+        Args:
+            prim: The prim to calculate the world transformation.
+        Returns:
+            A tuple of:
+            - Translation vector.
+            - Rotation quaternion, i.e. 3d vector plus angle.
+            - Scale vector.
+        """
+
+        self._viewport = get_active_viewport()
+        camera = self._viewport.get_active_camera()
+
+        transform = UsdGeom.Xformable(camera).ComputeWorldToLocalTransform(Usd.TimeCode.DEFAULT)
+        position = transform.ExtractTranslation()
+        rotation = transform.ExtractRotation()
+        euler_angles = rotation.GetEulerAngles()
+
+
+        # 获取视野角度 (fov)
+        fov = self._viewport.get_active_camera_fov()
+
+
+        # 获取视口的宽高比
+        aspect_ratio = self._viewport.get_viewport_rect().size[0] / self._viewport.get_viewport_rect().size[1]
+
+        self.camera_label.text = f"Position: {position}, Rotation: {euler_angles}, Field of View: {fov}, Aspect Ratio: {aspect_ratio}"
+
+
+    def get_cube_info(self):
+        # if not prim.IsValid():
+        #     return
+        # xform = UsdGeom.Xformable(prim)
+        # time = Usd.TimeCode.Default() # The time at which we compute the bounding box
+        # world_transform: Gf.Matrix4d = xform.ComputeLocalToWorldTransform(time)
+        # translation: Gf.Vec3d = world_transform.ExtractTranslation()
+        # rotation: Gf.Rotation = world_transform.ExtractRotation()
+        # scale: Gf.Vec3d = Gf.Vec3d(*(v.GetLength() for v in world_transform.ExtractRotationMatrix()))
+        stage = self.usd_context.get_stage()
+        prim = stage.GetPrimAtPath("/World/Cube")
+
+        velocity = Gf.Vec3f(500.0,  0.0, 0.0)
+        xform = UsdGeom.Xform(prim)
+        localToWorld = xform.ComputeLocalToWorldTransform(Usd.TimeCode.Default())
+        transform = Gf.Transform(localToWorld)
+        rotation = transform.GetRotation()
+        scale = Gf.Vec3f(transform.GetScale())
+        velocity = rotation.TransformDir(velocity)
+        velocity = Gf.CompMult(scale, velocity)
+
+        # translation: Gf.Vec3d = transform.ExtractTranslation()
+        translation = 0
+
+        self.camera_label.text = f"Scale: {scale}, Rotation: {rotation}, Position: {translation}"
+        return translation, rotation, scale
 
     def load_and_display_image(self):
+        self.interactive_flag = 0 
+    # def load_and_display_image(self, event):
         image_path = self.image_path_field.model.as_string
-        image_path = "/home/dgxsa/Desktop/tkq/threegpt/gsplat-kit/kit-exts-project/exts/company.hello.world/company/hello/world/icon.png"
+        # image_path = "/home/dgxsa/Desktop/tkq/threegpt/gsplat-kit/kit-exts-project/exts/company.hello.world/company/hello/world/icon.png"
         image_path = "/home/dgxsa/Desktop/frame_00001.png"
-
-        try:
-            img = Image.open(image_path)
-            img = img.convert("RGBA")
-            width, height = img.size
-            # img_data = img.tobytes("raw", "RGBA")
-            img_data = img
-
-            class MyImageProvider(ui.ImageProvider):
-                def __init__(self, width, height, data):
-                    super().__init__()
-
-                    self._width = width
-                    self._height = height
-                    self._data = data
-                    
-
-                def request_texture(self):
-                    return self._width, self._height, self._data
-
-            viewport_window = get_active_viewport_window()
-            resolution = viewport_window.viewport_api.resolution
-            width, height = resolution
-
-            img = cv2.imread(image_path)
-            img = cv2.resize(img, (width, height), interpolation=cv2.INTER_LINEAR)
-            rgba = np.ones((height, width, 4), dtype=np.uint8) * 128
-            """RGBA image buffer. The shape is (H, W, 4), following the NumPy convention."""
-            rgba[:,:,3] = 255
-            rgba[:,:,:3] = img * 255
-
-            ui_nerf_provider = ui.ByteImageProvider()
-            # ui_nerf_img = ui.ImageWithProvider(
-            #         ui_nerf_provider,
-            #         width=ui.Percent(100),
-            #         height=ui.Percent(100),
-            #     )
-            ui_nerf_provider.set_bytes_data(rgba.flatten().tolist(), (width, height))
-
-
-            image_provider = MyImageProvider(width, height, img_data)
-
-            viewport_api = get_active_viewport()
-            camera_to_world_mat: Gf.Matrix4d = viewport_api.transform
-            object_to_world_mat: Gf.Matrix4d = Gf.Matrix4d()
         
-            dire_prim_path = "/World/Cube"
-            stage: Usd.Stage = omni.usd.get_context().get_stage()
-            selected_prim: Usd.Prim = stage.GetPrimAtPath(dire_prim_path)
-            selected_xform: UsdGeom.Xformable = UsdGeom.Xformable(selected_prim)
-            # object_to_world_mat = selected_xform.GetLocalTransformation()
-            # Get the active viewport window
-                    
+        # image_path = "/home/dgxsa/Desktop/tkq/threegpt/data/nerfstudio/poster/images/frame_00026.png"
+        self.get_transform()
+        resolution = self.viewport_window.viewport_api.resolution
+        width, height = resolution
 
-            # with window.get_frame("image_frame"):
-            #     self.scene_view = sc.SceneView()
-            #     with self.scene_view.scene:
-            #         sc.Image(image_path, width=width, height=height)
-            #     viewport.add_scene_view(scene_view)
-            
-            if viewport_window:
-                # Create a unique frame for our SceneView
-                with viewport_window.get_frame(self.ext_id):
-                    # Create a default SceneView
-                    self.scene_view = sc.SceneView()
-                    with self.scene_view.scene:
-                        # Display image in viewport
-                        # sc.Image(image_provider)
-                        sc.Image(ui_nerf_provider, width=width, height=height)
-                        # sc.Image(image_provider=image_path, width=width, height=height)
-                        # sc.Image(image_provider=image_path, width=width, height=height)
-                        pass
-            # sc.Image(image_provider=image_path, width=width, height=height)
-            # sc.Image(image_provider=image_path)
+        img = cv2.imread(image_path)
+        if self.camera_position != None:
+            # img = img * self.camera_rotation
+            pass
+        img = cv2.resize(img, (width, height), interpolation=cv2.INTER_LINEAR)
+        rgba = np.ones((height, width, 4), dtype=np.uint8) * 128
+        """RGBA image buffer. The shape is (H, W, 4), following the NumPy convention."""
+        rgba[:,:,3] = 255
+        rgba[:,:,:3] = img * 255        
+        self.tgs_provider.set_bytes_data(rgba.flatten().tolist(), (width, height))
+        # self.camera_label.text = "%s, %s,%s"%(str(self.camera_position), str(height),str(width))
+        # self.get_prim_camera()
+        # self.get_world_transform_xform()
 
-        except Exception as e:
-            print(f"Error loading image: {e}")
+        if self.viewport_window:
+            # Create a unique frame for our SceneView
+            with self.viewport_window.get_frame(self.ext_id):
+                # Create a default SceneView                
+                # if self.scene_view:
+                #     self.scene_view.destroy()
+                # self.scene_view = sc.SceneView()
+                # self.scene_view = sc.SceneView(aspect_ratio_policy=sc.AspectRatioPolicy.PRESERVE_ASPECT_FIT)
+                self.scene_view = sc.SceneView(aspect_ratio_policy=sc.AspectRatioPolicy.STRETCH)
+                self.scene_view = sc.SceneView(screen_aspect_ratio=0)
+                with self.scene_view.scene:
+                    # sc.Image(self.tgs_provider, width=width, height=height)
+                    sc.Image(self.tgs_provider, width=2, height=2)
+                    # sc.Image(self.tgs_provider)
+                # pass
+    def clear_scene_image(self):
+        self.interactive_flag = -1 
+        with self.viewport_window.get_frame(self.ext_id):
+            self.scene_view = sc.SceneView(aspect_ratio_policy=sc.AspectRatioPolicy.STRETCH)
+            self.scene_view = sc.SceneView(screen_aspect_ratio=0)
+            with self.scene_view.scene:
+                self.scene_view.scene.clear() # 清空 scene，恢复正常视口
 
     def on_shutdown(self):
         print("Image Display Extension shutting down")

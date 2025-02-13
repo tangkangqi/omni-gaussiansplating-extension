@@ -56,11 +56,12 @@ class ImageDisplayExtension(omni.ext.IExt):
             with ui.VStack():
                 self.image_path_field = ui.StringField(name="Image Path")
                 self.camera_label = ui.Label('camera status')
-                self.load_button = ui.Button("Load Image", clicked_fn=self.load_and_display_image)
-                self.clear_button = ui.Button("Clear Image", clicked_fn=self.clear_scene_image)
-                self.tgds_button = ui.Button("Start Intercative tdgs", clicked_fn = self.set_interactive)
-                if self.interactive_flag == 1:
-                    self._task = asyncio.ensure_future(self.periodic_update())
+                with ui.HStack():
+                    self.load_button = ui.Button("Load Image", clicked_fn=self.load_and_display_image)
+                    self.clear_button = ui.Button("Clear Image", clicked_fn=self.clear_scene_image)
+                    self.tgds_button = ui.Button("Start Intercative tdgs", clicked_fn = self.set_interactive)
+                    if self.interactive_flag == 1:
+                        self._task = asyncio.ensure_future(self.periodic_update())
         # self.rendering_event_stream = self.usd_context.get_rendering_event_stream()
         # self.rendering_event_delegate = self.rendering_event_stream.create_subscription_to_pop(
         #     self.load_and_display_image
@@ -107,8 +108,12 @@ class ImageDisplayExtension(omni.ext.IExt):
             self.camera_position = camera_to_object_pos
             self.camera_rotation = camera_to_object_rot
         
-        self.camera_label.text = f"""camera_to_world_mat: {camera_to_world_mat}, \n 
-        object_to_world_mat: {object_to_world_mat}, \n 
+        # self.camera_label.text = f"""camera_to_world_mat: {camera_to_world_mat}, \n 
+        # object_to_world_mat: {object_to_world_mat}, \n 
+        # camera_to_object_pos: {camera_to_object_pos}, \n
+        # camera_to_object_rot: {camera_to_object_rot}"""
+
+        self.camera_label.text = f"""object_to_world_mat: {object_to_world_mat}, \n 
         camera_to_object_pos: {camera_to_object_pos}, \n
         camera_to_object_rot: {camera_to_object_rot}"""
 
@@ -201,8 +206,8 @@ class ImageDisplayExtension(omni.ext.IExt):
         # image_path = "/home/dgxsa/Desktop/tkq/threegpt/gsplat-kit/kit-exts-project/exts/company.hello.world/company/hello/world/icon.png"
         # image_path = "/home/dgxsa/Desktop/frame_00001.png"
         img_id = int(self.camera_rotation[0] )%10
-        # image_path = f"/home/dgxsa/Desktop/tkq/threegpt/data/nerfstudio/poster/images/frame_0002{img_id}.png"
-        image_path = f"/mnt/threegpt/data/nerfstudio/poster/images/frame_0002{img_id}.png"
+        image_path = f"/home/dgxsa/Desktop/tkq/threegpt/data/nerfstudio/poster/images/frame_0002{img_id}.png"
+        # image_path = f"/mnt/threegpt/data/nerfstudio/poster/images/frame_0002{img_id}.png"
         
         resolution = self.viewport_window.viewport_api.resolution
         width, height = resolution

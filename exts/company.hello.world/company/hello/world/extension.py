@@ -8,6 +8,14 @@ from pxr import Gf, Usd, UsdGeom
 import numpy as np
 import cv2
 import asyncio
+import torch
+import sys
+# import plyfile
+print(sys.executable)
+print(sys.version)
+print(torch.__file__)
+print(torch.__version__)
+
 
 class ImageDisplayExtension(omni.ext.IExt):
     def __init__(self):
@@ -20,23 +28,28 @@ class ImageDisplayExtension(omni.ext.IExt):
         self.viewport_api = get_active_viewport()
         self.usd_context = omni.usd.get_context()
         self.scene_view = None
-        self.camera_rotation = None
         self.previous_rotation = None
         self.interactive_flag = 0
 
     async def periodic_update(self):
         while True:
-            await asyncio.sleep(0.1)  # 每隔 0.1 秒检查一次
+            await asyncio.sleep(0.05)  # 每隔 0.1 秒检查一次
+            if self.interactive_flag !=1:
+                return
             self.get_transform()
-            if self.previous_rotation != self.camera_position:
+            if self.previous_rotation != self.camera_rotation:
                 # if self.is_camera_changed():
                 self.previous_rotation = self.camera_rotation
                 self.load_and_display_image()
+
                 
     def set_interactive(self):
         self.interactive_flag = 1
+        asyncio.ensure_future(self.periodic_update())
+
     def on_startup(self, ext_id):
         print("Image Display Extension started")
+        self.check_and_create_cube()
         self._window = ui.Window("Image Display", width=300, height=400)
         self.ext_id = ext_id
         with self._window.frame:
@@ -52,6 +65,21 @@ class ImageDisplayExtension(omni.ext.IExt):
         # self.rendering_event_delegate = self.rendering_event_stream.create_subscription_to_pop(
         #     self.load_and_display_image
         # )
+
+    def check_and_create_cube(self):
+        stage = self.usd_context.get_stage()
+        if not stage:
+            print("[INFO] No USD Stage found")
+            return
+
+        cube_path = "/World/Cube"
+        cube_prim = stage.GetPrimAtPath(cube_path)
+
+        if not cube_prim.IsValid():
+            print("[INFO] Cube not found, creating...")
+            omni.kit.commands.execute('CreateMeshPrimWithDefaultXform', prim_type='Cube', prim_name='Cube', select_new_prim=False, prim_path=cube_path)
+        else:
+            print("[INFO] Cube already exists")
 
     def update_ui(self):
         print("[omni.nerf.viewport] Updating UI")
@@ -167,21 +195,19 @@ class ImageDisplayExtension(omni.ext.IExt):
         return translation, rotation, scale
 
     def load_and_display_image(self):
-        self.interactive_flag = 0 
     # def load_and_display_image(self, event):
+        self.get_transform()
         image_path = self.image_path_field.model.as_string
         # image_path = "/home/dgxsa/Desktop/tkq/threegpt/gsplat-kit/kit-exts-project/exts/company.hello.world/company/hello/world/icon.png"
-        image_path = "/home/dgxsa/Desktop/frame_00001.png"
+        # image_path = "/home/dgxsa/Desktop/frame_00001.png"
+        img_id = int(self.camera_rotation[0] )%10
+        # image_path = f"/home/dgxsa/Desktop/tkq/threegpt/data/nerfstudio/poster/images/frame_0002{img_id}.png"
+        image_path = f"/mnt/threegpt/data/nerfstudio/poster/images/frame_0002{img_id}.png"
         
-        # image_path = "/home/dgxsa/Desktop/tkq/threegpt/data/nerfstudio/poster/images/frame_00026.png"
-        self.get_transform()
         resolution = self.viewport_window.viewport_api.resolution
         width, height = resolution
 
         img = cv2.imread(image_path)
-        if self.camera_position != None:
-            # img = img * self.camera_rotation
-            pass
         img = cv2.resize(img, (width, height), interpolation=cv2.INTER_LINEAR)
         rgba = np.ones((height, width, 4), dtype=np.uint8) * 128
         """RGBA image buffer. The shape is (H, W, 4), following the NumPy convention."""
@@ -203,6 +229,7 @@ class ImageDisplayExtension(omni.ext.IExt):
                 self.scene_view = sc.SceneView(aspect_ratio_policy=sc.AspectRatioPolicy.STRETCH)
                 self.scene_view = sc.SceneView(screen_aspect_ratio=0)
                 with self.scene_view.scene:
+                    self.scene_view.scene.clear()
                     # sc.Image(self.tgs_provider, width=width, height=height)
                     sc.Image(self.tgs_provider, width=2, height=2)
                     # sc.Image(self.tgs_provider)

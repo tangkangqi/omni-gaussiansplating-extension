@@ -1,4 +1,9 @@
-# Extension Project Template
+# Omni Gaussian Splatting
+
+
+link: https://github.com/tangkangqi/omni-gassiansplating-extension
+
+![3dgs viewport screenshot](image.png)
 
 This project was automatically generated.
 

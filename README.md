@@ -5,6 +5,15 @@ link: https://github.com/tangkangqi/omni-gassiansplating-extension
 
 ![3dgs viewport screenshot](image.png)
 
+# Acknowledgement
+https://github.com/j3soon/omni-nerf-extension
+
+https://github.com/shumash/gaussian-splatting/blob/mshugrina/interactive/interactive.ipynb
+
+OpenUSD: https://openusd.org/release/tut_usd_tutorials.html
+Omniverse: https://docs.omniverse.nvidia.com/dev-guide/latest/programmer_ref/usd.html
+Viser: https://github.com/nerfstudio-project/viser
+
 This project was automatically generated.
 
 - `app` - It is a folder link to the location of your *Omniverse Kit* based app.

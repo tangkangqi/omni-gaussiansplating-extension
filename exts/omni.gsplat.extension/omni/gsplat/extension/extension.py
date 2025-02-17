@@ -10,6 +10,8 @@ import cv2
 import asyncio
 import torch
 import sys
+import requests
+
 # import plyfile
 print(sys.executable)
 print(sys.version)
@@ -30,6 +32,7 @@ class ImageDisplayExtension(omni.ext.IExt):
         self.scene_view = None
         self.previous_rotation = None
         self.interactive_flag = 0
+        self.camera_info = {'pos': self.camera_position, 'rot': self.camera_rotation, 'width': 0, 'height': 0 }
 
     async def periodic_update(self):
         while True:
@@ -108,14 +111,38 @@ class ImageDisplayExtension(omni.ext.IExt):
             self.camera_position = camera_to_object_pos
             self.camera_rotation = camera_to_object_rot
         
+        self._viewport = get_active_viewport()
+        camera = self._viewport.get_active_camera()
+        # 获取视野角度 (fov)
+        # fov = self._viewport.get_active_camera_fov()
+        # fov = np.sum(cam)
+        fov = 0.69111120
+        # 获取视口的宽高比
+        # aspect_ratio = self._viewport.get_viewport_rect().size[0] / self._viewport.get_viewport_rect().size[1]
+        aspect_ratio = None
+
         # self.camera_label.text = f"""camera_to_world_mat: {camera_to_world_mat}, \n 
         # object_to_world_mat: {object_to_world_mat}, \n 
         # camera_to_object_pos: {camera_to_object_pos}, \n
         # camera_to_object_rot: {camera_to_object_rot}"""
 
+        resolution = self.viewport_window.viewport_api.resolution
+        width, height = resolution
+
         self.camera_label.text = f"""object_to_world_mat: {object_to_world_mat}, \n 
         camera_to_object_pos: {camera_to_object_pos}, \n
-        camera_to_object_rot: {camera_to_object_rot}"""
+        camera_to_object_rot: {camera_to_object_rot}, \n
+        fov, aspect_ratio: {fov}, {aspect_ratio}, \n
+        resolution: {resolution}"""
+
+        self.camera_info = {
+            "rot": [v for v in camera_to_object_rot],
+            "pos": [v for v in camera_to_object_pos],
+            "width": width,
+            "height": height
+            # "fov":fov
+        }
+        return self.camera_info
 
     def get_prim_camera(self):
         stage = self.usd_context.get_stage()
@@ -208,17 +235,24 @@ class ImageDisplayExtension(omni.ext.IExt):
         img_id = int(self.camera_rotation[0] )%10
         image_path = f"/home/dgxsa/Desktop/tkq/threegpt/data/nerfstudio/poster/images/frame_0002{img_id}.png"
         # image_path = f"/mnt/threegpt/data/nerfstudio/poster/images/frame_0002{img_id}.png"
-        
-        resolution = self.viewport_window.viewport_api.resolution
-        width, height = resolution
 
-        img = cv2.imread(image_path)
+        data = self.camera_info
+        width, height = data['width'], data['height']
+        url = "http://127.0.0.1:8892/get_render"
+        response = requests.post(url, json=data)
+        jpeg_data = np.frombuffer(response.content, dtype=np.uint8)
+        decoded_image = cv2.imdecode(jpeg_data, cv2.IMREAD_UNCHANGED)
+
+        # img = cv2.imread(image_path)
+        img = decoded_image
         img = cv2.resize(img, (width, height), interpolation=cv2.INTER_LINEAR)
         rgba = np.ones((height, width, 4), dtype=np.uint8) * 128
         """RGBA image buffer. The shape is (H, W, 4), following the NumPy convention."""
         rgba[:,:,3] = 255
-        rgba[:,:,:3] = img * 255        
-        self.tgs_provider.set_bytes_data(rgba.flatten().tolist(), (width, height))
+        rgba[:,:,:3] = img * 255       
+        rgba_list =  rgba.flatten().tolist()
+
+        self.tgs_provider.set_bytes_data(rgba_list, (width, height))
         # self.camera_label.text = "%s, %s,%s"%(str(self.camera_position), str(height),str(width))
         # self.get_prim_camera()
         # self.get_world_transform_xform()
@@ -236,7 +270,7 @@ class ImageDisplayExtension(omni.ext.IExt):
                 with self.scene_view.scene:
                     self.scene_view.scene.clear()
                     # sc.Image(self.tgs_provider, width=width, height=height)
-                    sc.Image(self.tgs_provider, width=2, height=2)
+                    sc.Image(self.tgs_provider, width=2, height=2*height/width)
                     # sc.Image(self.tgs_provider)
                 # pass
     def clear_scene_image(self):

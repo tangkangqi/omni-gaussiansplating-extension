@@ -53,11 +53,20 @@ python gs_render_api.py
 ![alt text](image-2.png)
 ![alt text](image-3.png)
 
-- Using mouse right button and roll wheel to ajust, until you see a clear and interst region:
+- Using mouse right button and roll wheel to realtime ajust, until you see a clear and interst region:
     - long press the right button for up/down/left/right rotate
     - scroll forward/backward for scalling up/down (note: currently not so precise as camera fov side bar)
     - long press the scroll for move the scene center
 ![alt text](image-4.png)
+
+- You can fine tune the view parameters using UI side bar. 
+    - Note the number in side bar are unlinear ratio to ajust the delat value
+    - I use $y = \tan\left(\frac{\pi}{2.01} x\right)$ to function the side bar value from [-1, 1] to a large range $ \tan\left(\frac{\pi}{2.01} \right)$ , and you can change 2.01 to 2.001 or 2.1 to get larger or smaller range.
+- You can also click on "Save Image" to save this viewport scene. 
+- You hide "Clear Image" to see bare stage prim. 
+
+
+========================================= 
 
 This project was automatically generated.
 

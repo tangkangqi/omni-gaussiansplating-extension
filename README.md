@@ -29,6 +29,36 @@ OpenUSD: https://openusd.org/release/tut_usd_tutorials.html
 Omniverse: https://docs.omniverse.nvidia.com/dev-guide/latest/programmer_ref/usd.html
 Viser: https://github.com/nerfstudio-project/viser
 
+## STEPS:
+1. Start isaacsim UI and add the extension.
+![alt text](image-1.png)
+
+2. Start gaussian splatting backend in the same workstation. 
+- Note: you will need to install vanilla Gaussian Splatting, and the backend is compatible with 
+[commit id: 414b5](https://github.com/graphdeco-inria/gaussian-splatting/tree/414b553ef1d3032ea634b7b7a1d121173f36592c)
+```python
+git clone https://github.com/graphdeco-inria/gaussian-splatting.git
+git checkout 414b5
+```
+Then follow the steps to install Gaussian Splatting.
+- Start gs_render service:
+```python
+pip install flask
+cp exts\omni.gsplat.extension\omni\gsplat\extension\gs_render_api.py gaussisan-splatting
+python gs_render_api.py
+```
+
+3. Visualize the gaussian result in Omniverse.
+- Click "Start Interactive tgds" button to start visualize, first you might see a blur background, just adjust the focal side bar.
+![alt text](image-2.png)
+![alt text](image-3.png)
+
+- Using mouse right button and roll wheel to ajust, until you see a clear and interst region:
+    - long press the right button for up/down/left/right rotate
+    - scroll forward/backward for scalling up/down (note: currently not so precise as camera fov side bar)
+    - long press the scroll for move the scene center
+![alt text](image-4.png)
+
 This project was automatically generated.
 
 - `app` - It is a folder link to the location of your *Omniverse Kit* based app.

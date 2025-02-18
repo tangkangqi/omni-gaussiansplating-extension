@@ -79,6 +79,9 @@ def try_load_camera(model_path):
 # render_image = (render(test_camera, gaussians, pipeline, background)['render'].permute(1, 2, 0) * 255).to(torch.uint8).detach().cpu()
 
 import math
+import logging as _log
+import math
+import logging as _log
 class GaussianSplattingServer:
     def __init__(self, model_path='output/6a66ab97-9'):
         """
@@ -115,6 +118,8 @@ class GaussianSplattingServer:
 
     def get_camera(self, rot=[1, 0,0], pos=[1,1,1], width=1920, height=1080, fov = 0.6):
         theta = rot
+    
+        # theta = [i * math.pi / 180.0 for i in rot]
         R_x = np.array([[1, 0, 0],
                         [0, math.cos(theta[0]), -math.sin(theta[0])],
                         [0, math.sin(theta[0]), math.cos(theta[0])]
@@ -132,14 +137,37 @@ class GaussianSplattingServer:
     
         R = np.dot(R_z, np.dot(R_y, R_x))
         T = pos
+        
+        # # Darcy: I modified the R T calculation from Masha Shugrina: https://github.com/shumash/gaussian-splatting/tree/mshugrina/interactive
+        # tmp = np.zeros((4, 4))
+        # # tmp[:3, :3] = raw_camera['rotation']
+        # # tmp[:3, 3] = raw_camera['position']
+        # tmp[:3, :3] = R
+        # tmp[:3, 3] = pos
+        # tmp[3, 3] = 1
+        # C2W = np.linalg.inv(tmp)
+        # R = C2W[:3, :3].transpose()
+        # T = C2W[:3, 3]
+        
+        # fovx = focal2fov(raw_camera['fx'], width)
+        # fovy = focal2fov(raw_camera['fy'], height)
+        
+        # fovx = fov * np.linalg.norm(pos)/15
+        # fovy = fov * np.linalg.norm(pos)/15
         fovx = fov
         fovy = fov
+        _log.warning(f"R:{R}, T:{T}, fovx:{fovx}, fovy: {fovy}")
         return GSCamera(colmap_id=0,
                         R=R, T=T, FoVx=fovx, FoVy=fovy, 
                         image=torch.zeros((3, height, width)),  # fake 
                         gt_alpha_mask=None,image_name='fake', uid=0)
     def get_render_image(self, current_camera = {'rot':[1, 0,0], 'pos': [1,1,1], 'width' : 1920, 'height': 1080 }):
-        self.current_gs_camera = self.get_camera(current_camera['rot'], current_camera['pos'], current_camera['width'], current_camera['height'])
+        fov = 0.6
+        if "fov" in current_camera:
+            fov = current_camera['fov']
+        else:
+            fov = fov * np.linalg.norm(current_camera['pos'])
+        self.current_gs_camera = self.get_camera(current_camera['rot'], current_camera['pos'], current_camera['width'], current_camera['height'], fov)
         try:
             render_result = render(self.current_gs_camera, self.gaussians, self.pipeline, self.background)
             render_image = (render_result['render'].permute(1, 2, 0) * 255).to(torch.uint8).detach().cpu()
@@ -206,8 +234,6 @@ def api_get_rgba():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-import logging as _log
-
 @app.route('/get_render', methods=['POST'])
 def api_get_render():
     """
@@ -219,21 +245,25 @@ def api_get_render():
         
         if not data:
             return jsonify({"error": "No input data provided"}), 400
-        
+        _log.warning(f"receive request data:{data}")
         # 检查必要参数是否存在
         required_keys = ['rot', 'pos', 'width', 'height']
         for key in required_keys:
             if key not in data:
                 return jsonify({"error": f"Missing required parameter: {key}"}), 400
-        
-        cv2_image = GS.get_render_cv2_image(current_camera=data)
+        camera_info = data
+        camera_info['rot'] = [math.pi * v/180 for v in data['rot']]
+        camera_info['pos'] = [v/5 for v in data['pos']]
+        cv2_image = GS.get_render_cv2_image(current_camera=camera_info)
         success, jpeg_image = cv2.imencode('.jpg', cv2_image, [cv2.IMWRITE_JPEG_QUALITY, 100])
         # return send_file(io.BytesIO(cv2_image.tobytes()), mimetype='image/png')
-        _log.warning("sucess render post")
+        _log.warning(f"sucess render post:{camera_info}")
+        print(data)
         return send_file(io.BytesIO(jpeg_image.tobytes()), mimetype='image/jpeg')
     
     except Exception as e:
+        print("ERROR POST")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, port='8892')
+    app.run(host="0.0.0.0", debug=True, port='8892')

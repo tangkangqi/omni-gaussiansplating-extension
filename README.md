@@ -3,7 +3,22 @@
 
 link: https://github.com/tangkangqi/omni-gassiansplating-extension
 
+![alt text](extension-train.png)
+[video](<2025-02-18 02-15-45.mkv>)
+
+[video](<2025-02-18 10-24-23.mkv>)
 ![3dgs viewport screenshot](image.png)
+
+## High Point:
+- Omniverse viewport realtime interactive by mouse, roll and sidebar
+- Calculate prim Camera focal, rotation, position transformation for precise interactive control
+- Vanilla Gaussian Splatting support (doesn't relay on nerfstudio or viser)
+- Docker deployment support(updating...)
+- Flask streaming compressed frame Microservice support (updating...)
+
+## Improvement:
+- Black screen flash issue when interactiving
+- Load Ply to usd
 
 # Acknowledgement
 https://github.com/j3soon/omni-nerf-extension

@@ -20,14 +20,13 @@ link: https://github.com/tangkangqi/omni-gassiansplating-extension
 - Black screen flash issue when interactiving
 - Load Ply to usd
 
-## Acknowledgement
-https://github.com/j3soon/omni-nerf-extension
-
-https://github.com/shumash/gaussian-splatting/blob/mshugrina/interactive/interactive.ipynb
-
-OpenUSD: https://openusd.org/release/tut_usd_tutorials.html
-Omniverse: https://docs.omniverse.nvidia.com/dev-guide/latest/programmer_ref/usd.html
-Viser: https://github.com/nerfstudio-project/viser
+# Acknowledgement and Play Around:
+- [j3soon](https://github.com/j3soon) made this opensource nerf extension based on NerfStudio streaming and rpyc sync interactive, and the nerf scene is on a seperate UI with Omniverse Viewport only demo mesh assets and show rotation: https://github.com/j3soon/omni-nerf-extension
+- [shumash](https://github.com/shumash) made a interactive piepline using NVIDIA Kaolin 14.0 and include camera parameters transform function with guidance: https://github.com/shumash/gaussian-splatting/blob/mshugrina/interactive/interactive.ipynb
+- OpenUSD: https://openusd.org/release/tut_usd_tutorials.html
+- Omniverse: https://docs.omniverse.nvidia.com/dev-guide/latest/programmer_ref/usd.html
+- Viser: https://github.com/nerfstudio-project/viser
+- NVIDIA Kaolin, Warp for volume rendering.
 
 # STEPS:
 ### 1. Start isaacsim UI and add the extension.
@@ -63,7 +62,7 @@ python gs_render_api.py
     - Note the number in side bar are unlinear ratio to ajust the delat value
     - I use $y = \tan\left(\frac{\pi}{2.01} x\right)$ to function the side bar value from [-1, 1] to a large range $\tan\left(\frac{\pi}{2.01} \right)$ , and you can change 2.01 to 2.001 or 2.1 to get larger or smaller range.
 - You can also click on "Save Image" to save this viewport scene. 
-- You hide "Clear Image" to see bare stage prim. 
+- You can click on hide "Clear Image" to see bare stage prim. 
 
 
 ========================================= 

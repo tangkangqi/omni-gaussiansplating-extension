@@ -13,7 +13,7 @@ import sys
 import requests
 import os
 import math
-
+# from .ply2usd import convert_ply_to_usd, test_ply2usd
 # import plyfile
 print(sys.executable)
 print(sys.version)
@@ -340,7 +340,7 @@ class ImageDisplayExtension(omni.ext.IExt):
         # image_path = "/home/dgxsa/Desktop/tkq/threegpt/gsplat-kit/kit-exts-project/exts/company.hello.world/company/hello/world/icon.png"
         # image_path = "/home/dgxsa/Desktop/frame_00001.png"
         img_id = int(self.camera_rotation[0] )%10
-        image_path = f"/home/dgxsa/Desktop/tkq/threegpt/data/nerfstudio/poster/images/frame_0002{img_id}.png"
+        # image_path = f"/home/dgxsa/Desktop/tkq/threegpt/data/nerfstudio/poster/images/frame_0002{img_id}.png"
         # image_path = f"/mnt/threegpt/data/nerfstudio/poster/images/frame_0002{img_id}.png"
 
         data = self.camera_info
@@ -357,7 +357,8 @@ class ImageDisplayExtension(omni.ext.IExt):
         rgba = np.ones((height, width, 4), dtype=np.uint8) * 128
         """RGBA image buffer. The shape is (H, W, 4), following the NumPy convention."""
         rgba[:,:,3] = 255
-        rgba[:,:,:3] = img * 255       
+        # rgba[:,:,:3] = img * 255 
+        rgba[:,:,:3] = img      
         rgba_list =  rgba.flatten().tolist()
 
         self.tgs_provider.set_bytes_data(rgba_list, (width, height))

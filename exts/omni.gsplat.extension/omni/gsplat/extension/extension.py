@@ -12,6 +12,7 @@ import torch
 import sys
 import requests
 import os
+import math
 
 # import plyfile
 print(sys.executable)
@@ -68,6 +69,32 @@ class ImageDisplayExtension(omni.ext.IExt):
                 # self.slider = ui.Slider(min_value=0.0, max_value=100.0, value=0.0)
                 # 监听滑块的值变化
                 # self.slider.set_on_value_changed_fn(self.on_slider_changed)
+                with ui.HStack(height=20):
+                    ui.Label("set delta pos:", width=50)
+                    ui.Spacer(width=10)
+                    self.float_model_delta_pos_x = ui.SimpleFloatModel(0, min=-1,max=1)
+                    self.float_model_delta_pos_y = ui.SimpleFloatModel(0, min=-1,max=1)
+                    self.float_model_delta_pos_z = ui.SimpleFloatModel(0, min=-1,max=1)
+                    ui.Spacer(width=10)
+                    ui.FloatSlider(self.float_model_delta_pos_x, width=150 ,min=-1,max=1,step=0.01)
+                    ui.Spacer(width=10)
+                    ui.FloatSlider(self.float_model_delta_pos_y, width=150 ,min=-1,max=1,step=0.01)
+                    ui.Spacer(width=10)
+                    ui.FloatSlider(self.float_model_delta_pos_z, width=150 ,min=-1,max=1,step=0.01)
+
+                with ui.HStack(height=20):
+                    ui.Label("set delta rot:", width=50)
+                    ui.Spacer(width=10)
+                    self.float_model_delta_rot_1 = ui.SimpleFloatModel(0, min=-1,max=1)
+                    self.float_model_delta_rot_2 = ui.SimpleFloatModel(0, min=-1,max=1)
+                    self.float_model_delta_rot_3 = ui.SimpleFloatModel(0, min=-1,max=1)
+                    ui.Spacer(width=10)
+                    ui.FloatSlider(self.float_model_delta_rot_1, width=150, min=-1,max=1,step=0.01)
+                    ui.Spacer(width=10)
+                    ui.FloatSlider(self.float_model_delta_rot_2, width=150, min=-1,max=1,step=0.01)
+                    ui.Spacer(width=10)
+                    ui.FloatSlider(self.float_model_delta_rot_3, width=150, min=-1,max=1,step=0.01)
+                
                 with ui.HStack(height=20):
                     ui.Label("set camera fov:", width=50)
                     ui.Spacer(width=10)
@@ -141,7 +168,15 @@ class ImageDisplayExtension(omni.ext.IExt):
         if camera_to_object_pos != self.camera_position or camera_to_object_rot != self.camera_rotation:
             self.camera_position = camera_to_object_pos
             self.camera_rotation = camera_to_object_rot
+
+        delta_tmp = [[self.float_model_delta_pos_x.get_value_as_float(), self.float_model_delta_pos_y.get_value_as_float(),self.float_model_delta_pos_z.get_value_as_float()],
+        [self.float_model_delta_rot_1.get_value_as_float(), self.float_model_delta_rot_2.get_value_as_float(), self.float_model_delta_rot_3.get_value_as_float()]]
         
+        delta_tmp = [[np.tan(math.pi / 2.1 * v) for v in delta_tmp[0]], [np.tan(math.pi / 2.02 * v) for v in delta_tmp[1]]]
+        
+        self.camera_position = [camera_to_object_pos[i] + delta_tmp[0][i] for i in range(3)]
+        self.camera_rotation = [camera_to_object_rot[i] + delta_tmp[1][i] for i in range(3)]
+
         self._viewport = get_active_viewport()
         camera = self._viewport.get_active_camera()
         # 获取视野角度 (fov)
@@ -172,15 +207,15 @@ class ImageDisplayExtension(omni.ext.IExt):
         width, height = resolution
 
         self.camera_label.text = f"""object_to_world_mat: {object_to_world_mat}, \n 
-        camera_to_object_pos: {camera_to_object_pos}, \n
-        camera_to_object_rot: {camera_to_object_rot}, \n
+        camera_to_object_pos: {self.camera_position}, \n
+        camera_to_object_rot: {self.camera_rotation}, \n
         fov, aspect_ratio: {fov}, {aspect_ratio}, \n
         resolution: {resolution},\n
         scale: {scale}"""
 
         self.camera_info = {
-            "rot": [v for v in camera_to_object_rot],
-            "pos": [v for v in camera_to_object_pos],
+            "rot": [v for v in self.camera_rotation],
+            "pos": [v for v in self.camera_position],
             "width": width,
             "height": height,
             "fov":fov

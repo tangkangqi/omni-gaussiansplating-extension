@@ -11,6 +11,7 @@ import asyncio
 import torch
 import sys
 import requests
+import os
 
 # import plyfile
 print(sys.executable)
@@ -32,17 +33,22 @@ class ImageDisplayExtension(omni.ext.IExt):
         self.scene_view = None
         self.previous_rotation = None
         self.interactive_flag = 0
-        self.camera_info = {'pos': self.camera_position, 'rot': self.camera_rotation, 'width': 0, 'height': 0 }
+        self.camera_fov = 0.6
+        self.camera_info = {'pos': self.camera_position, 'rot': self.camera_rotation, 'width': 0, 'height': 0, 'fov': self.camera_fov}
+        self.cv2_image = None
+        
 
     async def periodic_update(self):
         while True:
-            await asyncio.sleep(0.05)  # 每隔 0.1 秒检查一次
+            await asyncio.sleep(0.01)  # 每隔 0.1 秒检查一次
             if self.interactive_flag !=1:
                 return
             self.get_transform()
-            if self.previous_rotation != self.camera_rotation:
+            if self.previous_rotation != self.camera_rotation or self.previous_position != self.camera_position or self.camera_fov != self.previous_fov:
                 # if self.is_camera_changed():
                 self.previous_rotation = self.camera_rotation
+                self.previous_position = self.camera_position
+                self.previous_fov = self.camera_fov
                 self.load_and_display_image()
 
                 
@@ -59,16 +65,41 @@ class ImageDisplayExtension(omni.ext.IExt):
             with ui.VStack():
                 self.image_path_field = ui.StringField(name="Image Path")
                 self.camera_label = ui.Label('camera status')
+                # self.slider = ui.Slider(min_value=0.0, max_value=100.0, value=0.0)
+                # 监听滑块的值变化
+                # self.slider.set_on_value_changed_fn(self.on_slider_changed)
+                with ui.HStack(height=20):
+                    ui.Label("set camera fov:", width=50)
+                    ui.Spacer(width=10)
+                    self.float_model = ui.SimpleFloatModel(0.01, min=0.01,max=4)
+                    example_progress = ui.ProgressBar(model=self.float_model, width=200, height=10)
+                    new_style = {"color" : 0xFF00b976}
+                    example_progress.set_style(new_style)
+                    ui.Spacer(width=10)
+                    ui.FloatSlider(self.float_model, width=200 ,min=0.01,max=4,step=0.01)
+
                 with ui.HStack():
                     self.load_button = ui.Button("Load Image", clicked_fn=self.load_and_display_image)
                     self.clear_button = ui.Button("Clear Image", clicked_fn=self.clear_scene_image)
                     self.tgds_button = ui.Button("Start Intercative tdgs", clicked_fn = self.set_interactive)
+                    self.focal_button = ui.Button("Initial Focal", clicked_fn = self.set_cube_focal)
+                    self.screenshot_button = ui.Button("Save Image", clicked_fn = self.save_gs_image)
                     if self.interactive_flag == 1:
                         self._task = asyncio.ensure_future(self.periodic_update())
         # self.rendering_event_stream = self.usd_context.get_rendering_event_stream()
         # self.rendering_event_delegate = self.rendering_event_stream.create_subscription_to_pop(
         #     self.load_and_display_image
         # )
+
+    def save_gs_image(self):
+        fd_path = os.path.dirname(os.path.abspath(__file__))
+        cv2.imwrite(os.path.join(fd_path,'test_feteched_gs.png'), self.cv2_image, [int(cv2.IMWRITE_PNG_COMPRESSION),0])
+
+    def on_slider_changed(self, value):
+        """当滑块值变化时更新进度条和标签"""
+        self.progress_bar.value = value
+        # self.label.text = f"Current Value: {value:.2f}"
+        self.camera_fov = float(f"{value:.2f}")
 
     def check_and_create_cube(self):
         stage = self.usd_context.get_stage()
@@ -116,10 +147,21 @@ class ImageDisplayExtension(omni.ext.IExt):
         # 获取视野角度 (fov)
         # fov = self._viewport.get_active_camera_fov()
         # fov = np.sum(cam)
-        fov = 0.69111120
+        # fov = 0.69111120
+        self.camera_fov = self.float_model.get_value_as_float()
+        fov = self.camera_fov
         # 获取视口的宽高比
         # aspect_ratio = self._viewport.get_viewport_rect().size[0] / self._viewport.get_viewport_rect().size[1]
         aspect_ratio = None
+
+        # scales = selected_xform.GetLocalTransformation().ExtractScale()
+
+        xform = UsdGeom.Xform(selected_prim)
+        localToWorld = xform.ComputeLocalToWorldTransform(Usd.TimeCode.Default())
+        transform = Gf.Transform(localToWorld)
+        rotation = transform.GetRotation()
+        scale = Gf.Vec3f(transform.GetScale())
+
 
         # self.camera_label.text = f"""camera_to_world_mat: {camera_to_world_mat}, \n 
         # object_to_world_mat: {object_to_world_mat}, \n 
@@ -133,16 +175,46 @@ class ImageDisplayExtension(omni.ext.IExt):
         camera_to_object_pos: {camera_to_object_pos}, \n
         camera_to_object_rot: {camera_to_object_rot}, \n
         fov, aspect_ratio: {fov}, {aspect_ratio}, \n
-        resolution: {resolution}"""
+        resolution: {resolution},\n
+        scale: {scale}"""
 
         self.camera_info = {
             "rot": [v for v in camera_to_object_rot],
             "pos": [v for v in camera_to_object_pos],
             "width": width,
-            "height": height
-            # "fov":fov
+            "height": height,
+            "fov":fov
         }
         return self.camera_info
+
+    def set_cube_focal(self):
+        rot = [1,0,0]
+        pos = [1,1,1]
+        stage = self.usd_context.get_stage()
+        cube_path = "/World/Cube"
+        cube_prim = stage.GetPrimAtPath(cube_path)
+
+        xform = UsdGeom.Xformable(cube_prim)
+        xform.MakeMatrixXform()
+
+        transform_api = UsdGeom.XformCommonAPI(cube_prim)
+        time = Usd.TimeCode.Default() 
+        world_transform: Gf.Matrix4d = xform.ComputeLocalToWorldTransform(time)
+        translation: Gf.Vec3d = world_transform.ExtractTranslation()
+
+        # 转换旋转角度为弧度并创建旋转矩阵
+        rotation_matrix = Gf.Matrix4d().SetRotate(Gf.Rotation(Gf.Vec3d(1, 0, 0), rot[0]) *
+                                                  Gf.Rotation(Gf.Vec3d(0, 1, 0), rot[1]) *
+                                                  Gf.Rotation(Gf.Vec3d(0, 0, 1), rot[2]))
+        # rotation_matrix = Gf.Matrix4d().SetRotate(Gf.Rotation(Gf.Vec3d(1, 0, 0), rot[0]) *
+        #                                           Gf.Rotation(Gf.Vec3d(0, 1, 0), rot[1]) *
+        #                                           Gf.Rotation(Gf.Vec3d(0, 0, 1), rot[2]))
+        
+        # 设置 Transform 矩阵（位置 + 旋转）
+        transform_matrix = rotation_matrix.SetTranslateOnly(Gf.Vec3d(*pos))
+        # xform.SetLocalTransformation(transform_matrix)
+        # transform_api.SetTranslate(transform_matrix)
+        transform_api.SetTranslate(rot)
 
     def get_prim_camera(self):
         stage = self.usd_context.get_stage()
@@ -245,6 +317,7 @@ class ImageDisplayExtension(omni.ext.IExt):
 
         # img = cv2.imread(image_path)
         img = decoded_image
+        self.cv2_image = img
         img = cv2.resize(img, (width, height), interpolation=cv2.INTER_LINEAR)
         rgba = np.ones((height, width, 4), dtype=np.uint8) * 128
         """RGBA image buffer. The shape is (H, W, 4), following the NumPy convention."""
@@ -271,6 +344,7 @@ class ImageDisplayExtension(omni.ext.IExt):
                     self.scene_view.scene.clear()
                     # sc.Image(self.tgs_provider, width=width, height=height)
                     sc.Image(self.tgs_provider, width=2, height=2*height/width)
+                    # sc.Image(self.tgs_provider, width=2*width/height, height=2)
                     # sc.Image(self.tgs_provider)
                 # pass
     def clear_scene_image(self):

@@ -9,18 +9,18 @@ link: https://github.com/tangkangqi/omni-gassiansplating-extension
 [video](<2025-02-18 10-24-23.mkv>)
 ![3dgs viewport screenshot](image.png)
 
-## High Point:
+## High Points:
 - Omniverse viewport realtime interactive by mouse, roll and sidebar
 - Calculate prim Camera focal, rotation, position transformation for precise interactive control
 - Vanilla Gaussian Splatting support (doesn't relay on nerfstudio or viser)
 - Docker deployment support(updating...)
 - Flask streaming compressed frame Microservice support (updating...)
 
-## Improvement:
+## Improvement Plan:
 - Black screen flash issue when interactiving
 - Load Ply to usd
 
-# Acknowledgement
+## Acknowledgement
 https://github.com/j3soon/omni-nerf-extension
 
 https://github.com/shumash/gaussian-splatting/blob/mshugrina/interactive/interactive.ipynb
@@ -29,11 +29,11 @@ OpenUSD: https://openusd.org/release/tut_usd_tutorials.html
 Omniverse: https://docs.omniverse.nvidia.com/dev-guide/latest/programmer_ref/usd.html
 Viser: https://github.com/nerfstudio-project/viser
 
-## STEPS:
-1. Start isaacsim UI and add the extension.
+# STEPS:
+### 1. Start isaacsim UI and add the extension.
 ![alt text](image-1.png)
 
-2. Start gaussian splatting backend in the same workstation. 
+### 2. Start gaussian splatting backend in the same workstation. 
 - Note: you will need to install vanilla Gaussian Splatting, and the backend is compatible with 
 [commit id: 414b5](https://github.com/graphdeco-inria/gaussian-splatting/tree/414b553ef1d3032ea634b7b7a1d121173f36592c)
 ```python
@@ -48,7 +48,7 @@ cp exts\omni.gsplat.extension\omni\gsplat\extension\gs_render_api.py gaussisan-s
 python gs_render_api.py
 ```
 
-3. Visualize the gaussian result in Omniverse.
+### 3. Visualize the gaussian result in Omniverse.
 - Click "Start Interactive tgds" button to start visualize, first you might see a blur background, just adjust the focal side bar.
 ![alt text](image-2.png)
 ![alt text](image-3.png)
@@ -61,7 +61,7 @@ python gs_render_api.py
 
 - You can fine tune the view parameters using UI side bar. 
     - Note the number in side bar are unlinear ratio to ajust the delat value
-    - I use $y = \tan\left(\frac{\pi}{2.01} x\right)$ to function the side bar value from [-1, 1] to a large range $ \tan\left(\frac{\pi}{2.01} \right)$ , and you can change 2.01 to 2.001 or 2.1 to get larger or smaller range.
+    - I use $y = \tan\left(\frac{\pi}{2.01} x\right)$ to function the side bar value from [-1, 1] to a large range $\tan\left(\frac{\pi}{2.01} \right)$ , and you can change 2.01 to 2.001 or 2.1 to get larger or smaller range.
 - You can also click on "Save Image" to save this viewport scene. 
 - You hide "Clear Image" to see bare stage prim. 
 
